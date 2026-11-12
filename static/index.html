@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Receipt Splitter</title>
+<style>
+  :root {
+    --bg: #f6f4f1; --card: #fff; --ink: #1d1b19; --muted: #77716a; --line: #e6e1da;
+    --accent: #e8501c; --accent-soft: #fde9e1; --ok: #2f8a4c; --warn: #b7791f; --warn-soft: #fdf3e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161514; --card: #201e1c; --ink: #f1ede8; --muted: #a29b93; --line: #34302c;
+      --accent: #ff6a35; --accent-soft: #3a2219; --ok: #5cc27d; --warn: #e3a948; --warn-soft: #36291a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.4rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .steps { display: flex; gap: 6px; margin-bottom: 20px; }
+  .steps div { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .steps div.on { background: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+           background: var(--card); color: var(--ink); padding: 9px 16px; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:disabled { opacity: .4; cursor: not-allowed; }
+  button.small { padding: 5px 10px; font-size: .88rem; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .spread { justify-content: space-between; }
+  input[type=text] { font: inherit; flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px;
+                     border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  input[type=text]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px;
+          border-radius: 999px; background: var(--accent-soft); }
+  .chip button { border: 0; background: none; padding: 0 4px; color: var(--muted); font-size: 1.1rem; line-height: 1; }
+  .item-name { font-size: 1.3rem; font-weight: 650; margin: 4px 0; }
+  .item-price { font-size: 2rem; font-weight: 700; }
+  .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 18px 0 10px; }
+  .person { text-align: left; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .person.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .person kbd { font: .75rem ui-monospace, monospace; opacity: .6; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 6px 0 14px; }
+  .bar > div { height: 100%; background: var(--accent); transition: width .2s; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 6px; border-top: 1px solid var(--line);
+             cursor: pointer; border-radius: 6px; }
+  .list li:first-child { border-top: 0; }
+  .list li:hover { background: var(--bg); }
+  .list li.cur { background: var(--accent-soft); }
+  .list .who { color: var(--muted); font-size: .85rem; }
+  .list .todo { color: var(--warn); }
+  .banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; }
+  .banner.warn { background: var(--warn-soft); color: var(--warn); }
+  .banner.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+  .totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .total-card .amt { font-size: 1.7rem; font-weight: 700; }
+  details summary { cursor: pointer; color: var(--muted); font-size: .9rem; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; margin-top: 6px; }
+  td { padding: 4px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td.r { text-align: right; white-space: nowrap; padding-left: 8px; }
+  .hint { font-size: .82rem; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Receipt Splitter</h1>
+    <span id="meta" class="muted num"></span>
+  </header>
+  <div class="steps"><div id="s1"></div><div id="s2"></div><div id="s3"></div></div>
+  <div id="app"><div class="card muted">Reading receipt…</div></div>
+</main>
+
+<script>
+const S = { receipt: null, people: [], assign: [], idx: 0, step: 1 };
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur = v => '€ ' + Number(v).toFixed(2).replace('.', ',');
+
+async function init() {
+  const r = await fetch('/api/receipt').then(r => r.json());
+  if (r.error) { app.innerHTML = `<div class="card banner warn">${esc(r.error)}</div>`; return; }
+  S.receipt = r;
+  S.assign = r.items.map(() => []);
+  document.getElementById('meta').textContent =
+    `${r.date ?? ''} · ${r.items.length} items · ${eur(r.receipt_total ?? r.items_total)}`;
+  render();
+}
+
+function render() {
+  ['s1','s2','s3'].forEach((id, i) => document.getElementById(id).classList.toggle('on', i < S.step));
+  ({1: renderPeople, 2: renderItem, 3: renderSummary})[S.step]();
+}
+
+/* ---------- Step 1: participants ---------- */
+function renderPeople() {
+  const r = S.receipt;
+  app.innerHTML = `
+    ${r.total_matches ? '' : `<div class="banner warn">Heads up: the parsed items add up to ${eur(r.items_total)}, but the receipt total is ${eur(r.receipt_total)}. Some lines may have been missed.</div>`}
+    <div class="card">
+      <h2>Who took part in this purchase?</h2>
+      <form id="addf" class="row">
+        <input type="text" id="name" placeholder="Name" autocomplete="off" autofocus>
+        <button>Add</button>
+      </form>
+      <div class="chips">${S.people.map((p, i) =>
+        `<span class="chip">${esc(p)}<button data-rm="${i}" title="Remove">×</button></span>`).join('')
+        || '<span class="muted">No participants yet.</span>'}</div>
+    </div>
+    <div class="row spread">
+      <span class="muted">${S.people.length} participant${S.people.length === 1 ? '' : 's'}</span>
+      <button class="primary" id="go" ${S.people.length ? '' : 'disabled'}>Assign items →</button>
+    </div>`;
+  const input = document.getElementById('name');
+  input.focus();
+  document.getElementById('addf').onsubmit = e => {
+    e.preventDefault();
+    const n = input.value.trim();
+    if (n && !S.people.includes(n)) S.people.push(n);
+    render();
+  };
+  app.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+    const name = S.people.splice(+b.dataset.rm, 1)[0];
+    S.assign = S.assign.map(a => a.filter(p => p !== name));
+    render();
+  });
+  document.getElementById('go').onclick = () => { S.step = 2; render(); };
+}
+
+/* ---------- Step 2: item-by-item assignment ---------- */
+function renderItem() {
+  const items = S.receipt.items, it = items[S.idx], sel = S.assign[S.idx];
+  const done = S.assign.filter(a => a.length).length;
+  const share = sel.length ? Number(it.amount) / sel.length : null;
+  const qty = it.quantity ? `${esc(it.quantity)} × ${eur(it.unit_price)}` : 'Discount';
+  app.innerHTML = `
+    <div class="row spread muted num"><span>Item ${S.idx + 1} of ${items.length}</span><span>${done}/${items.length} assigned</span></div>
+    <div class="bar"><div style="width:${done / items.length * 100}%"></div></div>
+    <div class="card">
+      <div class="muted num">${qty}</div>
+      <div class="item-name">${esc(it.name)}</div>
+      <div class="item-price num">${eur(it.amount)}</div>
+      <div class="people">${S.people.map((p, i) =>
+        `<button class="person ${sel.includes(p) ? 'on' : ''}" data-p="${i}">
+           <span>${esc(p)}</span>${i < 9 ? `<kbd>${i + 1}</kbd>` : ''}</button>`).join('')}</div>
+      <div class="row spread">
+        <div class="row">
+          <button class="small" id="all">Everyone <kbd>A</kbd></button>
+          <button class="small" id="none">Clear</button>
+          ${S.idx > 0 ? '<button class="small" id="same">Same as previous <kbd>S</kbd></button>' : ''}
+        </div>
+        <span class="muted num">${share === null ? 'Not assigned yet' : `${eur(share)} each`}</span>
+      </div>
+    </div>
+    <div class="row spread">
+      <button id="prev">← Back</button>
+      ${S.idx < items.length - 1
+        ? '<button class="primary" id="next">Next →</button>'
+        : '<button class="primary" id="finish">See overview →</button>'}
+    </div>
+    <p class="hint">Keyboard: number keys toggle people, A = everyone, S = same as previous, Enter / → next, ← back.</p>
+    <div class="card" style="margin-top:16px">
+      <h2>All items</h2>
+      <ul class="list">${items.map((x, i) => `
+        <li data-i="${i}" class="${i === S.idx ? 'cur' : ''}">
+          <span>${esc(x.name)}<br><span class="who ${S.assign[i].length ? '' : 'todo'}">${
+            S.assign[i].length ? S.assign[i].map(esc).join(', ') : 'unassigned'}</span></span>
+          <span class="num">${eur(x.amount)}</span></li>`).join('')}</ul>
+    </div>`;
+
+  app.querySelectorAll('[data-p]').forEach(b => b.onclick = () => toggle(+b.dataset.p));
+  app.querySelectorAll('[data-i]').forEach(li => li.onclick = () => { S.idx = +li.dataset.i; render(); });
+  document.getElementById('all').onclick = setAll;
+  document.getElementById('none').onclick = () => { S.assign[S.idx] = []; render(); };
+  document.getElementById('same')?.addEventListener('click', same);
+  document.getElementById('prev').onclick = prev;
+  document.getElementById('next')?.addEventListener('click', next);
+  document.getElementById('finish')?.addEventListener('click', finish);
+}
+
+function toggle(i) {
+  const p = S.people[i]; if (!p) return;
+  const a = S.assign[S.idx];
+  S.assign[S.idx] = a.includes(p) ? a.filter(x => x !== p) : S.people.filter(x => x === p || a.includes(x));
+  render();
+}
+function setAll() { S.assign[S.idx] = [...S.people]; render(); }
+function same() { if (S.idx > 0) { S.assign[S.idx] = [...S.assign[S.idx - 1]]; render(); } }
+function next() { if (S.idx < S.receipt.items.length - 1) { S.idx++; render(); } else finish(); }
+function prev() { if (S.idx > 0) { S.idx--; } else { S.step = 1; } render(); }
+
+document.addEventListener('keydown', e => {
+  if (S.step !== 2 || e.target.tagName === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^[1-9]$/.test(e.key)) toggle(+e.key - 1);
+  else if (e.key === 'a' || e.key === 'A') setAll();
+  else if (e.key === 's' || e.key === 'S') same();
+  else if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); next(); }
+  else if (e.key === 'ArrowLeft') prev();
+});
+
+/* ---------- Step 3: overview ---------- */
+async function finish() {
+  S.step = 3;
+  app.innerHTML = '<div class="card muted">Calculating…</div>';
+  S.result = await fetch('/api/split', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ participants: S.people, assignments: S.assign }),
+  }).then(r => r.json());
+  render();
+}
+
+function renderSummary() {
+  const res = S.result, r = S.receipt;
+  const unassignedSum = res.unassigned.reduce((s, x) => s + Number(x.amount), 0);
+  app.innerHTML = `
+    ${res.unassigned.length
+      ? `<div class="banner warn">${res.unassigned.length} item(s) worth ${eur(unassignedSum)} are not assigned to anyone:
+           ${res.unassigned.map(x => esc(x.name)).join(', ')}.</div>`
+      : `<div class="banner ok">All items assigned. Total ${eur(res.grand_total)} matches the receipt.</div>`}
+    <div class="totals">${res.people.map(p => `
+      <div class="card total-card">
+        <div class="muted">${esc(p.name)}</div>
+        <div class="amt num">${eur(p.total)}</div>
+        <details><summary>${p.items.length} item${p.items.length === 1 ? '' : 's'}</summary>
+          <table>${p.items.map(x => `<tr><td>${esc(x.name)}${x.shared_with > 1
+            ? ` <span class="muted">(÷${x.shared_with})</span>` : ''}</td><td class="r num">${eur(x.share)}</td></tr>`).join('')}</table>
+        </details>
+      </div>`).join('')}</div>
+    <div class="card row spread num">
+      <span>Assigned total</span><strong>${eur(res.grand_total)} <span class="muted">/ ${eur(r.receipt_total ?? r.items_total)}</span></strong>
+    </div>
+    <div class="row spread">
+      <button id="back">← Edit assignments</button>
+      <button id="copy">Copy as text</button>
+    </div>`;
+  document.getElementById('back').onclick = () => { S.step = 2; render(); };
+  document.getElementById('copy').onclick = async e => {
+    const txt = `Colruyt ${r.date ?? ''}\n` + res.people.map(p => `${p.name}: ${eur(p.total)}`).join('\n');
+    await navigator.clipboard.writeText(txt);
+    e.target.textContent = 'Copied ✓';
+  };
+}
+
+init();
+</script>
+</body>
+</html>

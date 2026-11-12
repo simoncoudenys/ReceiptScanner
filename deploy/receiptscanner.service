@@ -1,0 +1,25 @@
+[Unit]
+Description=Colruyt receipt splitter (web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/receiptscanner
+Environment=RECEIPT_HOST=0.0.0.0
+Environment=RECEIPT_PORT=8000
+Environment=RECEIPT_IN_DIR=/var/lib/receiptscanner/in
+Environment=PYTHONUNBUFFERED=1²
+ExecStart=/usr/bin/python3 /opt/receiptscanner/app.py
+Restart=on-failure
+RestartSec=3
+
+# Hardening (all of these work inside unprivileged LXC containers)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/var/lib/receiptscanner
+
+[Install]
+WantedBy=multi-user.target
