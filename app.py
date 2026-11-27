@@ -1,15 +1,19 @@
 """Colruyt receipt splitter — tiny stdlib web server.
 
 Run:  python3 app.py   then open http://localhost:8000
-Reads the single PDF in ./in
+The user imports a receipt PDF in the browser (POST /api/import).
+GET /api/receipt still reads the single PDF in ./in.
 """
 from __future__ import annotations
 
 import json
 import os
+import subprocess
+import tempfile
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 from colruyt_parser import parse_pdf
 
@@ -18,6 +22,26 @@ IN_DIR = Path(os.environ.get("RECEIPT_IN_DIR", ROOT / "in"))
 INDEX = ROOT / "static" / "index.html"
 HOST = os.environ.get("RECEIPT_HOST", "127.0.0.1")
 PORT = int(os.environ.get("RECEIPT_PORT", "8000"))
+MAX_UPLOAD = 10 * 1024 * 1024  # 10 MB
+
+
+def parse_upload(data: bytes, filename: str) -> dict:
+    """Parse an uploaded receipt PDF. Raises ValueError with a user-facing message."""
+    if not data.startswith(b"%PDF"):
+        raise ValueError("That file is not a PDF.")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "receipt.pdf"
+        path.write_bytes(data)
+        try:
+            receipt = parse_pdf(path)
+        except subprocess.CalledProcessError:
+            raise ValueError("Could not read this PDF. Is it damaged?") from None
+        except FileNotFoundError:
+            raise RuntimeError("pdftotext (poppler-utils) is not installed on the server.") from None
+    if not receipt["items"]:
+        raise ValueError("No items found in this PDF. Is it a Colruyt receipt?")
+    receipt["file"] = filename
+    return receipt
 
 
 def load_receipt() -> dict:
@@ -86,12 +110,24 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"Not found", "text/plain")
 
     def do_POST(self):
-        if self.path != "/api/split":
+        if self.path not in ("/api/import", "/api/split"):
             return self._send(404, b"Not found", "text/plain")
         length = int(self.headers.get("Content-Length", 0))
-        payload = json.loads(self.rfile.read(length) or b"{}")
-        receipt = load_receipt()
-        self._json(split(receipt["items"], payload["participants"], payload["assignments"]))
+        if length > MAX_UPLOAD:
+            return self._json({"error": "File too large (max 10 MB)."}, 413)
+        body = self.rfile.read(length)
+
+        if self.path == "/api/import":
+            name = unquote(self.headers.get("X-Filename", "receipt.pdf"))
+            try:
+                self._json(parse_upload(body, name))
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+            except Exception as e:  # e.g. pdftotext not installed
+                self._json({"error": str(e)}, 500)
+        else:
+            payload = json.loads(body or b"{}")
+            self._json(split(payload["items"], payload["participants"], payload["assignments"]))
 
     def log_message(self, fmt, *args):
         pass
